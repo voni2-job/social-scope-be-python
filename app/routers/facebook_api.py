@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Query
+from models.comment import PageComment
+from fastapi import APIRouter, Query, Depends
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from services import facebook_services, openai_services
 import os
 import httpx
+from sqlalchemy.orm import Session
+from core.database import get_db
 
 load_dotenv() 
 router = APIRouter()
@@ -40,10 +43,16 @@ class FacebookPagePostListResponse(BaseModel):
     page_posts: list[FacebookPagePostDetails]
 
 class FacebookCommentDetails(BaseModel):
-    id: str
+    comment_id: str
     message: str
     from_user: dict = Field(alias="from")
     created_time: str
+
+class FacebookCommentDatabase(BaseModel):
+    comment_id: str
+    message: str
+    created_time: str
+  
 
 class FacebookCommentListResponse(BaseModel):
     post_comments: list[FacebookCommentDetails]
@@ -94,3 +103,12 @@ async def get_all_page_comments(page_id: str = Query(..., description="Facebook 
         "suggestions": suggestions,
         "topper_comments": topper_comments
         }     
+
+@router.post("/post-all-comment")
+async def create_item(fbcomments: FacebookCommentDatabase,db: Session = Depends(get_db), page_id: str = Query(..., description="Facebook Page ID")
+):
+    comment = await facebook_services.post_all_comments(page_id, fbcomments.comment_id, fbcomments.message, fbcomments.created_time)
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return {"status": "saved", "id": comment.comment_id, "comments": comment.message, "created_time": comment.created_time}
