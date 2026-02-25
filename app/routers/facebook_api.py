@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from services import facebook_services, openai_services
 import os
 import httpx
@@ -35,8 +35,24 @@ class FacebookPagePostDetails(BaseModel):
     permalink_url: str
     created_time: str
 
+
 class FacebookPagePostListResponse(BaseModel):
     page_posts: list[FacebookPagePostDetails]
+
+class FacebookCommentDetails(BaseModel):
+    id: str
+    message: str
+    from_user: dict = Field(alias="from")
+    created_time: str
+
+class FacebookCommentListResponse(BaseModel):
+    post_comments: list[FacebookCommentDetails]
+
+
+# {'type': 'missing', 'loc': ('response', 'id'), 'msg': 'Field required', 'input': {'post_comments': []}}
+# {'type': 'missing', 'loc': ('response', 'permalink_url'), 'msg': 'Field required', 'input': {'post_comments': []}}
+#{'type': 'missing', 'loc': ('response', 'created_time'), 'msg': 'Field required', 'input': {'post_comments': []}}
+
 
 
 @router.get("/exchange-token", response_model=FacebookTokenResponse, summary="Exchange short-lived Facebook token for long-lived token",)
@@ -54,7 +70,7 @@ async def get_page_posts(page_access_token: str = Query(..., description="Page a
     response = await facebook_services.post_page_list(page_id, page_access_token)
     return {"page_posts": response.json().get("data", [])}
 
-@router.get("/get-post-comments", summary="Get Facebook post comments", response_model=FacebookPagePostDetails)
+@router.get("/get-post-comments", summary="Get Facebook post comments", response_model=FacebookCommentListResponse)
 async def get_post_comments(post_id: str = Query(..., description="Facebook Post ID"), page_access_token: str = Query(..., description="Page access token")):
     response = await facebook_services.get_post_comments(post_id, page_access_token)
     return {"post_comments": response.json().get("data", [])}
