@@ -1,15 +1,21 @@
-from models.comment import PageComment
-from fastapi import APIRouter, Query, Depends
+from DBmodels.CommentModel import PageComment
+from fastapi import APIRouter, Query, Depends, HTTPException
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from services import facebook_services, openai_services
 import os
 import httpx
-from sqlalchemy.orm import Session
-from core.database import get_db
+from core.database import DATABASE_URL, Base, get_db,engine, AsyncSession
+from datetime import datetime
 
 load_dotenv() 
 router = APIRouter()
+
+async def startup_event():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
 
 #load environment variables
 FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID")
@@ -43,11 +49,12 @@ class FacebookPagePostListResponse(BaseModel):
     page_posts: list[FacebookPagePostDetails]
 
 class FacebookCommentDetails(BaseModel):
-    comment_id: str
+    id: str
     message: str
     from_user: dict = Field(alias="from")
     created_time: str
 
+## THE DB MODEL ##
 class FacebookCommentDatabase(BaseModel):
     comment_id: str
     message: str
@@ -104,11 +111,24 @@ async def get_all_page_comments(page_id: str = Query(..., description="Facebook 
         "topper_comments": topper_comments
         }     
 
-@router.post("/post-all-comment")
-async def create_item(fbcomments: FacebookCommentDatabase,db: Session = Depends(get_db), page_id: str = Query(..., description="Facebook Page ID")
-):
-    comment = await facebook_services.post_all_comments(page_id, fbcomments.comment_id, fbcomments.message, fbcomments.created_time)
-    db.add(comment)
-    db.commit()
-    db.refresh(comment)
-    return {"status": "saved", "id": comment.comment_id, "comments": comment.message, "created_time": comment.created_time}
+@router.get("/get-all-page-comments-for-db-TEST", summary="TEST")
+async def get_all_page_comments(page_id: str = Query(..., description="Facebook Page ID"), db: AsyncSession= Depends(get_db)):
+
+    page_access_token = await facebook_services.get_page_token(page_id, os.getenv("USER_ACCESS_TOKEN"))
+    response = await facebook_services.get_all_comment_details(page_id, page_access_token.json().get("access_token",None))
+    
+    for comment in response:
+        db_comment = PageComment(
+            comment_id=comment["comment_id"],
+            message=comment["message"],
+            created_time=datetime.strptime(comment["created_time"], "%Y-%m-%dT%H:%M:%S%z")
+        )
+        db.add(db_comment)
+    await db.commit()
+
+    return {
+        "comments": response
+        }    
+
+
+   

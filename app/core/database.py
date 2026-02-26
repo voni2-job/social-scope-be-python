@@ -1,6 +1,11 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from typing import Annotated
+
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 
 # construct connection string from environment variables
 POSTGRES_USER = os.getenv("POSTGRES_USER")
@@ -14,13 +19,19 @@ DATABASE_URL = (
     f"{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 )
 
-# create asynchronous engine and session factory
-engine = create_async_engine(DATABASE_URL, echo=False)
-AsyncSessionLocal = sessionmaker(
-    bind=engine, class_=AsyncSession, expire_on_commit=False
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True
 )
 
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+Base = declarative_base()
+
 async def get_db():
-    """Yield a database session, used as a dependency in FastAPI endpoints."""
     async with AsyncSessionLocal() as session:
         yield session

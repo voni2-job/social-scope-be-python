@@ -1,8 +1,16 @@
 from fastapi import FastAPI
 from routers import facebook_api
 from fastapi.middleware.cors import CORSMiddleware
+from core.database import engine, Base
+import DBmodels.CommentModel
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("Tables created!")
 
 origins = [
     "http://localhost:5173",  # your frontend
