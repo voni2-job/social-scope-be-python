@@ -92,7 +92,7 @@ async def get_post_comments(post_id: str = Query(..., description="Facebook Post
     return {"post_comments": response.json().get("data", [])}
 
 @router.get("/get-all-page-comments", summary="Get all comments from a Facebook page")
-async def get_all_page_comments(page_id: str = Query(..., description="Facebook Page ID")):
+async def get_all_page_comments(page_id: str = Query(..., description="Facebook Page ID"), db: AsyncSession = Depends(get_db)):
 
     page_access_token = await facebook_services.get_page_token(page_id, os.getenv("USER_ACCESS_TOKEN"))
     profile = await facebook_services.get_profile(page_id, page_access_token.json().get("access_token",None))
@@ -100,6 +100,16 @@ async def get_all_page_comments(page_id: str = Query(..., description="Facebook 
     comment_sentiments = await  openai_services.get_comment_sentiments(response)
     suggestions = await openai_services.get_suggestion(response)
     topper_comments = await openai_services.get_topper(response)
+
+    for comment in response:
+        db_comment = PageComment(
+            comment_id=comment["comment_id"],
+            message=comment["message"],
+            created_time=datetime.strptime(comment["created_time"], "%Y-%m-%dT%H:%M:%S%z")
+        )
+        db.add(db_comment)
+    await db.commit()
+
 
     return {
         "comments": response, 
@@ -111,24 +121,6 @@ async def get_all_page_comments(page_id: str = Query(..., description="Facebook 
         "topper_comments": topper_comments
         }     
 
-@router.get("/get-all-page-comments-for-db-TEST", summary="TEST")
-async def get_all_page_comments(page_id: str = Query(..., description="Facebook Page ID"), db: AsyncSession= Depends(get_db)):
-
-    page_access_token = await facebook_services.get_page_token(page_id, os.getenv("USER_ACCESS_TOKEN"))
-    response = await facebook_services.get_all_comment_details(page_id, page_access_token.json().get("access_token",None))
-    
-    for comment in response:
-        db_comment = PageComment(
-            comment_id=comment["comment_id"],
-            message=comment["message"],
-            created_time=datetime.strptime(comment["created_time"], "%Y-%m-%dT%H:%M:%S%z")
-        )
-        db.add(db_comment)
-    await db.commit()
-
-    return {
-        "comments": response
-        }    
 
 
    
