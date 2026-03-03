@@ -1,3 +1,5 @@
+from sqlalchemy import desc, select
+from sqlalchemy.dialects.postgresql import insert
 from DBmodels.CommentModel import PageComment
 from fastapi import APIRouter, Query, Depends, HTTPException
 from dotenv import load_dotenv
@@ -100,6 +102,9 @@ async def get_all_page_comments(page_id: str = Query(..., description="Facebook 
     comment_sentiments = await  openai_services.get_comment_sentiments(response)
     suggestions = await openai_services.get_suggestion(response)
     topper_comments = await openai_services.get_topper(response)
+    latest_comment_stmt = select(PageComment).order_by(desc(PageComment.created_time)).limit(1)
+    result = await db.execute(latest_comment_stmt)
+    latest_comment = result.scalar_one_or_none()
 
 
 
@@ -109,18 +114,38 @@ async def get_all_page_comments(page_id: str = Query(..., description="Facebook 
     # Test with Bulk Insert for better performance use Python Lists to temporarily store the comments and then insert them into the database in one go. This can significantly reduce the number of database transactions and improve performance.
     # Time <= logic for each comment and insert into DB
     # Web Socket Notification to say that background task is completed.
+    #Background Task
 
+ 
 
+    formatted_comments = [
+        {
+            "comment_id": c["comment_id"],
+            "message": c["message"],
+            "created_time": datetime.strptime(
+            c["created_time"], "%Y-%m-%dT%H:%M:%S%z"
+            )
+        }
+        for c in response
+    ]
 
-    for comment in response:
-        db_comment = PageComment(
-            comment_id=comment["comment_id"],
-            message=comment["message"],
-            created_time=datetime.strptime(comment["created_time"], "%Y-%m-%dT%H:%M:%S%z")
-        )
-        db.add(db_comment)
-    await db.commit()
+    if latest_comment: 
+        formatted_comments = [ 
+            c for c in formatted_comments 
+            if c["created_time"] > latest_comment.created_time 
+            ]
+        
+    #For testing purpose only REMOVE MO PAGKATAPOS
 
+    #Pangcheck if nag update ba yung Lists 
+    print(f"this is the comments to be pushed: {formatted_comments}")
+    print(f"this is the latest comment: {latest_comment.message}")
+
+    if formatted_comments:
+        stmt = insert(PageComment).values(formatted_comments) 
+        stmt = stmt.on_conflict_do_nothing(index_elements=['comment_id'])
+        await db.execute(stmt)
+        await db.commit()
 
     return {
         "comments": response, 
