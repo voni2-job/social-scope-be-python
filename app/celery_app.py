@@ -12,4 +12,8 @@ celery_app = Celery(
 # Optional: Configuration
 celery_app.conf.update(
     task_track_started=True,
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    worker_prefetch_multiplier=1,
 )

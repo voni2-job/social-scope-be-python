@@ -9,6 +9,9 @@ import os
 import httpx
 from core.database import DATABASE_URL, Base, get_db,engine, AsyncSession
 from datetime import datetime
+from tasks.save_to_db import long_task
+from fastapi import APIRouter
+
 
 load_dotenv() 
 router = APIRouter()
@@ -67,12 +70,6 @@ class FacebookCommentListResponse(BaseModel):
     post_comments: list[FacebookCommentDetails]
 
 
-# {'type': 'missing', 'loc': ('response', 'id'), 'msg': 'Field required', 'input': {'post_comments': []}}
-# {'type': 'missing', 'loc': ('response', 'permalink_url'), 'msg': 'Field required', 'input': {'post_comments': []}}
-#{'type': 'missing', 'loc': ('response', 'created_time'), 'msg': 'Field required', 'input': {'post_comments': []}}
-
-
-
 @router.get("/exchange-token", response_model=FacebookTokenResponse, summary="Exchange short-lived Facebook token for long-lived token",)
 async def get_token(shortLivedToken: str = Query(..., description="Short-lived token")):
     response = await facebook_services.exchange_facebook_token(shortLivedToken)
@@ -93,70 +90,33 @@ async def get_post_comments(post_id: str = Query(..., description="Facebook Post
     response = await facebook_services.get_post_comments(post_id, page_access_token)
     return {"post_comments": response.json().get("data", [])}
 
-@router.get("/get-all-page-comments", summary="Get all comments from a Facebook page")
-async def get_all_page_comments(page_id: str = Query(..., description="Facebook Page ID"), db: AsyncSession = Depends(get_db)):
+@router.get("/get-all-page-comments")
+async def get_all_page_comments(page_id: str):
 
-    page_access_token = await facebook_services.get_page_token(page_id, os.getenv("USER_ACCESS_TOKEN"))
-    profile = await facebook_services.get_profile(page_id, page_access_token.json().get("access_token",None))
-    response = await facebook_services.get_all_comments(page_id, page_access_token.json().get("access_token",None))
-    comment_sentiments = await  openai_services.get_comment_sentiments(response)
-    suggestions = await openai_services.get_suggestion(response)
-    topper_comments = await openai_services.get_topper(response)
-    latest_comment_stmt = select(PageComment).order_by(desc(PageComment.created_time)).limit(1)
-    result = await db.execute(latest_comment_stmt)
-    latest_comment = result.scalar_one_or_none()
-
-
-
-
-    #Get Post_Comments
-
-    # Test with Bulk Insert for better performance use Python Lists to temporarily store the comments and then insert them into the database in one go. This can significantly reduce the number of database transactions and improve performance.
-    # Time <= logic for each comment and insert into DB
-    # Web Socket Notification to say that background task is completed.
-    #Background Task
-
- 
-
-    formatted_comments = [
-        {
-            "comment_id": c["comment_id"],
-            "message": c["message"],
-            "created_time": datetime.strptime(
-            c["created_time"], "%Y-%m-%dT%H:%M:%S%z"
-            )
-        }
-        for c in response
-    ]
-
-    if latest_comment: 
-        formatted_comments = [ 
-            c for c in formatted_comments 
-            if c["created_time"] > latest_comment.created_time 
-            ]
-        
-    #For testing purpose only REMOVE MO PAGKATAPOS
-
-    #Pangcheck if nag update ba yung Lists 
-    print(f"this is the comments to be pushed: {formatted_comments}")
-    print(f"this is the latest comment: {latest_comment.message}")
-
-    if formatted_comments:
-        stmt = insert(PageComment).values(formatted_comments) 
-        stmt = stmt.on_conflict_do_nothing(index_elements=['comment_id'])
-        await db.execute(stmt)
-        await db.commit()
+    task = long_task.delay(page_id)
 
     return {
-        "comments": response, 
-        "facebook": profile.json(), 
-        "follower": profile.json().get("fan_count", None),
-        "url": profile.json()["picture"]["data"]["url"],
-        "comment_sentiments": comment_sentiments,
-        "suggestions": suggestions,
-        "topper_comments": topper_comments
-        }     
+        "message": "Processing started",
+        "task_id": task.id
+    }
 
+@router.get("/get-all-page-comments")
+async def get_all_page_comments(page_id: str):
+    """
+    Triggers background processing of Facebook comments.
+    Returns immediately with Celery task_id.
+    """
+    task = long_task.delay(page_id)
+    return {"message": "Processing started", "task_id": task.id}
+
+@router.get("/comments")
+async def get_comments(limit: int = 100, db: AsyncSession = Depends(get_db)):
+    stmt = select(PageComment).order_by(PageComment.created_time.desc()).limit(limit)
+    result = await db.execute(stmt)
+    comments = result.scalars().all()
+    
+
+    return {"count": len(comments), "comments": comments}
 
 
    
