@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from routers import facebook_api
+from websockets_routes import facebook_ws
 from fastapi.middleware.cors import CORSMiddleware
 from core.database import engine, Base
 import DBmodels.CommentModel
@@ -26,4 +27,4 @@ app.add_middleware(
 )
 
 app.include_router(facebook_api.router, prefix="/facebook", tags=["facebook"])
-
+app.include_router(facebook_ws.router, prefix="/websockets", tags=["websockets"])

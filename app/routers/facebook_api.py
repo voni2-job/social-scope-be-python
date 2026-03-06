@@ -2,7 +2,7 @@ import asyncio
 from sqlalchemy import desc, select
 from sqlalchemy.dialects.postgresql import insert
 from DBmodels.CommentModel import PageComment
-from fastapi import APIRouter, Query, Depends, HTTPException, WebSocket
+from fastapi import APIRouter, Query, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from services import facebook_services, openai_services
@@ -110,4 +110,3 @@ async def get_comments(limit: int = 100, db: AsyncSession = Depends(get_db)):
     return {"count": len(comments), "comments": comments}
 
 
-#WEB SOCKETS

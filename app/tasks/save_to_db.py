@@ -31,7 +31,7 @@ async def _process(page_id: str, db):
         profile = await facebook_services.get_profile(page_id, page_access_token.json().get("access_token",None))
         response = await facebook_services.get_all_comments(page_id, page_access_token.json().get("access_token",None))
 
-        """ DO NOT REMOVE! COMMENTED """
+        """ DO NOT REMOVE!"""
         #comment_sentiments = await  openai_services.get_comment_sentiments(response)
         #suggestions = await openai_services.get_suggestion(response)
         #topper_comments = await openai_services.get_topper(response)
