@@ -71,12 +71,11 @@ async def _process(page_id: str, db):
         print("Success Checkpoint 3")
 
         #Get lahat ng data sa formatted_comments, isa-isahin tas cocompare sa latest_comment.created time if greater than ang value overwrite new list tas palitan nung bago
-        if latest_comment: 
-            formatted_comments = [ 
-                c for c in formatted_comments 
-                if c["created_time"] > latest_comment.created_time 
-                ]
-            
+        latest_time = latest_comment.created_time.replace(tzinfo=None) if latest_comment else None
+        formatted_comments = [
+            c for c in formatted_comments
+            if (latest_time is None) or (c["created_time"] > latest_time)
+        ]
 
             
         #For testing purpose only!!! REMOVE MO PAGKATAPOS
@@ -84,8 +83,11 @@ async def _process(page_id: str, db):
         print("Success Checkpoint 4")
         print(f"this is the comments to be pushed: {formatted_comments}")
         #pangcheck ko lang if tama yung latest comment
-        print(f"this is the latest comment: {latest_comment.message}")
-
+        
+        if latest_comment is not None:
+            print(f"this is the latest comment: {latest_comment.message}")
+        else:
+            print("there is no latest comment yet / Database table is empty")
         if formatted_comments:
             stmt = insert(PageComment).values(formatted_comments) 
             stmt = stmt.on_conflict_do_nothing(index_elements=['comment_id'])

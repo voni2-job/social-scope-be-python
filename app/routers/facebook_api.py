@@ -109,6 +109,11 @@ async def get_all_page_comments(page_id: str):
     task = long_task.delay(page_id)
     return {"message": "Processing started", "task_id": task.id}
 
+@router.get("/notifications")
+async def get_notifications():
+    # Implementation for fetching notifications
+    pass
+
 @router.get("/comments")
 async def get_comments(limit: int = 100, db: AsyncSession = Depends(get_db)):
     stmt = select(PageComment).order_by(PageComment.created_time.desc()).limit(limit)
